@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #050505;
+  --color-accent: #FF4D00;
+  --color-accent-hover: #FF6A33;
+  --color-success: #34C759;
+  
+  --font-sans: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", "Roboto Mono", monospace;
+}
+
+@layer base {
+  body {
+    @apply antialiased selection:bg-accent/30 selection:text-white font-sans;
+  }
+}
+
+/* Apple Style Glassmorphism */
+.glass {
+  @apply backdrop-blur-[24px];
+}
+
+/* Light Theme Variables */
+.theme-light {
+  --bg-main: #F2F2F7;
+  --bg-card: rgba(255, 255, 255, 0.7);
+  --bg-sidebar: rgba(246, 246, 246, 0.8);
+  --border-subtle: rgba(0, 0, 0, 0.05);
+  --text-primary: #1C1C1E;
+  --text-secondary: #8E8E93;
+}
+
+/* Dark Theme Variables */
+.theme-dark {
+  --bg-main: #0A0A0A;
+  --bg-card: rgba(28, 28, 30, 0.7);
+  --bg-sidebar: rgba(20, 20, 22, 0.8);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --text-primary: #F2F2F7;
+  --text-secondary: #8E8E93;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-white/10 rounded-full hover:bg-white/20 transition-colors;
+}
+
+.modal-backdrop {
+  @apply fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-xl;
+}

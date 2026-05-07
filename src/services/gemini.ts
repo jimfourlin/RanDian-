@@ -2,10 +2,13 @@ let aiInstance: any = null;
 
 function getAI() {
   if (!aiInstance) {
-    const apiKey = import.meta.env.VITE_SILICONFLOW_API_KEY;
+    // 统一为 GEMINI_API_KEY（保持和文档/配置一致）
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY;
+
     if (!apiKey) {
-      throw new Error("VITE_SILICONFLOW_API_KEY 未配置");
+      throw new Error("GEMINI_API_KEY 环境变量未配置，请检查.env.local文件");
     }
+
     aiInstance = {
       apiKey: apiKey,
       baseUrl: "https://api.siliconflow.cn/v1",

@@ -2,13 +2,11 @@ let aiInstance: any = null;
 
 function getAI() {
   if (!aiInstance) {
-    // 关键：Vite + React 必须用 import.meta.env
+    // Vite 前端环境变量
     const apiKey = import.meta.env.VITE_SILICONFLOW_API_KEY;
-
     if (!apiKey) {
-      throw new Error("VITE_SILICONFLOW_API_KEY 环境变量未配置");
+      throw new Error("VITE_SILICONFLOW_API_KEY 未配置");
     }
-
     aiInstance = {
       apiKey: apiKey,
       baseUrl: "https://api.siliconflow.cn/v1",
@@ -25,7 +23,7 @@ export interface ClassificationResult {
 
 export const geminiService = {
   /**
-   * Tool 1: Image Analysis to Prompt
+   * 图片分析反推提示词（已适配硅基流动 VL识图模型）
    */
   async analyzeImageToPrompt(base64Image: string, mimeType: string): Promise<string> {
     const prompt = `你是一位顶级的AI绘画提示词专家。请根据我提供的参考图，深度分析图片内容，并按照以下结构生成一份极其详细的提示词报告。
@@ -45,18 +43,19 @@ export const geminiService = {
 3. 【精简版提示词】：纯中文核心词汇。
 4. 【国内工具优化技巧】：针对国内模型的中文使用建议。
 
-请严格遵循 JSON 格式，且内容中不得含有任何英文。`;
+请严格返回标准 JSON 格式，内容中不得含有任何英文。`;
 
     try {
       const ai = getAI();
-      const response = await fetch(`${ai.baseUrl}/chat/completions`, {
+      const res = await fetch(`${ai.baseUrl}/chat/completions`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${ai.apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "Qwen/Qwen2.5-72B-Instruct",
+          // 关键：换成硅基流动 识图模型
+          model: "Qwen/Qwen2-VL-7B-Instruct",
           messages: [
             {
               role: "user",
@@ -65,71 +64,59 @@ export const geminiService = {
                 {
                   type: "image_url",
                   image_url: {
-                    url: `data:${mimeType};base64,${base64Image}`,
-                  },
-                },
-              ],
-            },
-          ],
-          response_format: { type: "json_object" },
-        }),
+                    url: `data:${mimeType};base64,${base64Image}`
+                  }
+                }
+              ]
+            }
+          ]
+        })
       });
 
-      const data = await response.json();
+      const data = await res.json();
       return data.choices?.[0]?.message?.content || "";
     } catch (error) {
-      console.error("硅基流动 API 调用失败:", error);
+      console.error("识图失败：", error);
       return "算力分析失败，请检查网络或API配置。";
     }
   },
 
   /**
-   * Tool 2: Prompt Classification
+   * 提示词分类
    */
   async classifyPrompt(userInput: string): Promise<ClassificationResult> {
     try {
       const ai = getAI();
-      const response = await fetch(`${ai.baseUrl}/chat/completions`, {
+      const res = await fetch(`${ai.baseUrl}/chat/completions`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${ai.apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "Qwen/Qwen2.5-72B-Instruct",
+          model: "Qwen/Qwen2.5-7B-Instruct",
           messages: [
             {
               role: "user",
-              content: `你是一个数据分类专家。请分析以下提示词内容，并输出其对应的分类和标签。
-待处理提示词： ${userInput}`,
-            },
-          ],
-          response_format: {
-            type: "json_object",
-            schema: {
-              type: "object",
-              properties: {
-                category: { type: "string" },
-                tags: { type: "array", items: { type: "string" } },
-                summary: { type: "string" },
-              },
-              required: ["category", "tags", "summary"],
-            },
-          },
-        }),
+              content: `你是一个数据分类专家。请分析以下提示词内容，严格以JSON格式返回分类、标签、简介。
+字段：category(分类), tags(数组标签), summary(简短总结)
+待处理提示词：${userInput}`
+            }
+          ]
+        })
       });
 
-      const data = await response.json();
-      const result = data.choices?.[0]?.message?.content || "{}";
-      return JSON.parse(result);
+      const data = await res.json();
+      const jsonStr = data.choices?.[0]?.message?.content || "{}";
+      return JSON.parse(jsonStr);
     } catch (e) {
-      console.error("分类失败:", e);
-      return { category: "Unknown", tags: [], summary: "Failed to parse result." };
+      console.error("分类错误：", e);
+      return { category: "未知", tags: [], summary: "解析失败" };
     }
   },
 
   /**
-   * Tool 3: Prompt Refinement & Structuring
+   * 提示词结构化
    */
   async structurePrompt(userPrompt: string): Promise<string> {
     const prompt = `请将用户输入的原始提示词重构为“结构化模板”。
@@ -138,27 +125,27 @@ export const geminiService = {
 3. 确保逻辑清晰，包含“限制条件”和“输出格式”。
 
 原始输入： ${userPrompt}
-优化后： (请严格按照 Role, Task, Content, Note 的格式输出)`;
+优化后：`;
 
     try {
       const ai = getAI();
-      const response = await fetch(`${ai.baseUrl}/chat/completions`, {
+      const res = await fetch(`${ai.baseUrl}/chat/completions`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${ai.apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "Qwen/Qwen2.5-72B-Instruct",
-          messages: [{ role: "user", content: prompt }],
-        }),
+          model: "Qwen/Qwen2.5-7B-Instruct",
+          messages: [{ role: "user", content: prompt }]
+        })
       });
 
-      const data = await response.json();
-      return data.choices?.[0]?.message?.content || "结构化失败";
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content || "结构化重组失败";
     } catch (error) {
-      console.error("结构化重组失败:", error);
+      console.error("结构化错误：", error);
       return "结构化重组失败。";
     }
-  },
+  }
 };

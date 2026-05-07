@@ -1,18 +1,14 @@
-let aiInstance: any = null;
+import { GoogleGenAI, Type } from "@google/genai";
+
+let aiInstance: GoogleGenAI | null = null;
 
 function getAI() {
   if (!aiInstance) {
-    // 统一为 GEMINI_API_KEY（保持和文档/配置一致）
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY;
-
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error("GEMINI_API_KEY 环境变量未配置，请检查.env.local文件");
+      throw new Error("GEMINI_API_KEY is not defined in the environment.");
     }
-
-    aiInstance = {
-      apiKey: apiKey,
-      baseUrl: "https://api.siliconflow.cn/v1",
-    };
+    aiInstance = new GoogleGenAI({ apiKey });
   }
   return aiInstance;
 }
@@ -45,40 +41,41 @@ export const geminiService = {
 3. 【精简版提示词】：纯中文核心词汇。
 4. 【国内工具优化技巧】：针对国内模型的中文使用建议。
 
-请严格返回标准 JSON 格式，内容中不得含有任何英文。`;
+请严格遵循 JSON 格式，且内容中不得含有任何英文。`;
 
     try {
       const ai = getAI();
-      const response = await fetch(`${ai.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${ai.apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "Qwen/Qwen2-VL-72B-Instruct",
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: prompt },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: `data:${mimeType};base64,${base64Image}`
-                  }
-                }
-              ]
-            }
-          ]
-        }),
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [
+          { parts: [{ inlineData: { data: base64Image, mimeType } }, { text: prompt }] }
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              fullPrompt: { type: Type.STRING, description: "完整长提示词" },
+              dimensions: {
+                type: Type.OBJECT,
+                properties: {
+                  subject: { type: Type.STRING, description: "核心主体与细节" },
+                  scene: { type: Type.STRING, description: "场景与构图" },
+                  lighting: { type: Type.STRING, description: "光影与色彩" },
+                  style: { type: Type.STRING, description: "风格与画质" }
+                },
+                required: ["subject", "scene", "lighting", "style"]
+              },
+              shortPrompt: { type: Type.STRING, description: "精简版提示词" },
+              tips: { type: Type.ARRAY, items: { type: Type.STRING }, description: "优化技巧" }
+            },
+            required: ["fullPrompt", "dimensions", "shortPrompt", "tips"]
+          }
+        }
       });
-
-      const data = await response.json();
-      if (!data.choices) throw new Error("接口无返回");
-      return data.choices[0].message.content || "";
+      return response.text || "";
     } catch (error) {
-      console.error("图片分析错误:", error);
+      console.error("Gemini Vision Error:", error);
       return "算力分析失败，请检查网络或API配置。";
     }
   },
@@ -89,30 +86,27 @@ export const geminiService = {
   async classifyPrompt(userInput: string): Promise<ClassificationResult> {
     try {
       const ai = getAI();
-      const response = await fetch(`${ai.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${ai.apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "Qwen/Qwen2.5-72B-Instruct",
-          messages: [
-            {
-              role: "user",
-              content: `你是一个数据分类专家。请分析以下提示词内容，并输出其对应的分类和标签。
-待处理提示词： ${userInput}
-必须严格输出JSON：{"category":"","tags":[],"summary":""}`
-            }
-          ]
-        }),
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [`你是一个数据分类专家。请分析以下提示词内容，并输出其对应的分类和标签。
+待处理提示词： ${userInput}`],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              category: { type: Type.STRING },
+              tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+              summary: { type: Type.STRING }
+            },
+            required: ["category", "tags", "summary"]
+          }
+        }
       });
 
-      const data = await response.json();
-      const jsonStr = data.choices?.[0]?.message?.content || "{}";
-      return JSON.parse(jsonStr);
+      return JSON.parse(response.text || "{}");
     } catch (e) {
-      console.error("分类错误:", e);
+      console.error("Gemini Classify Error:", e);
       return { category: "Unknown", tags: [], summary: "Failed to parse result." };
     }
   },
@@ -131,23 +125,15 @@ export const geminiService = {
 
     try {
       const ai = getAI();
-      const response = await fetch(`${ai.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${ai.apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "Qwen/Qwen2.5-72B-Instruct",
-          messages: [{ role: "user", content: prompt }]
-        }),
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [prompt]
       });
 
-      const data = await response.json();
-      return data.choices?.[0]?.message?.content || "结构化重组失败。";
+      return response.text || "Failed to structure prompt.";
     } catch (error) {
-      console.error("结构化错误:", error);
+      console.error("Gemini Structure Error:", error);
       return "结构化重组失败。";
     }
-  },
+  }
 };
